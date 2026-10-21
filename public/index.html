@@ -27,13 +27,14 @@ button:disabled{opacity:.6;cursor:wait}
 .hint{font-size:.82rem;color:var(--muted);margin:4px 0 0}
 #previews{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 #previews img{height:56px;border-radius:4px}
-.filters{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;margin-top:10px}
+.filters{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
 @media(max-width:700px){.filters{grid-template-columns:1fr 1fr}.filters input{grid-column:1/-1}}
 .count{font-size:.85rem;color:var(--muted);margin:0 0 8px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
 .top{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:baseline}
 .site{font-weight:600;font-size:1.05rem}
 .tag{background:var(--tag);border-radius:999px;padding:1px 10px;font-size:.8rem}
+.st{border-radius:999px;padding:1px 10px;font-size:.8rem;font-weight:600}.st-ok{background:#d9f2e0;color:#14532d}.st-no{background:#fde8d4;color:#7c2d12}.st-other{background:#e5e7eb;color:#374151}
 .meta{color:var(--muted);font-size:.85rem}
 .note{margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
@@ -58,8 +59,8 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
   <input id="q" type="search" list="sites" placeholder="e.g. YouGov, Savanta, SurveyMonkey" autocomplete="off">
   <datalist id="sites"></datalist>
   <div class="filters">
-    <span style="display:none"></span>
     <select id="fcat" aria-label="Filter by category"></select>
+    <select id="fstatus" aria-label="Filter by status"></select>
     <select id="frng" aria-label="Filter by age range"></select>
     <select id="sort" aria-label="Sort entries">
       <option value="new">Newest first</option><option value="old">Oldest first</option>
@@ -79,9 +80,10 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
       <input id="newsite" maxlength="100" placeholder="Type the website name" aria-label="New website name">
     </div>
     <div><label for="cat">Category</label><select id="cat" required></select></div>
+    <div><label for="status">Status</label><select id="status" required></select></div>
     <div><label for="age">Age entered by the survey taker</label><input id="age" type="number" min="1" max="120" required></div>
     <div class="full"><label for="note">Short note for others</label>
-      <textarea id="note" maxlength="300" required placeholder="e.g. Pays within a week, but screens out a lot of people."></textarea>
+      <textarea id="note" maxlength="300" required></textarea>
       <p class="hint">Up to 300 characters.</p></div>
     <div class="full"><label for="image">Images of the answer (up to 5)</label>
       <input id="image" type="file" accept="image/*" multiple required><div id="previews"></div></div>
@@ -96,6 +98,7 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
 (function(){
 var $=function(i){return document.getElementById(i)};
 var CATS=["Cars & transport","Food & drink","Politics & news","Business & work","Health & illness","Shopping & retail","Technology","Finance & banking","Travel & holidays","Entertainment & media","Education","Home & garden","Fashion & beauty","Sports & fitness","Other"];
+var STATUSES=["Successful","Screened out","Quota full","Did not finish"];
 var RANGES=[["Under 18",0,17],["18–24",18,24],["25–34",25,34],["35–44",35,44],["45–54",45,54],["55–64",55,64],["65+",65,200]];
 var KNOWN=[["YouGov",["you gov"]],["Prolific",[]],["Savanta",["crowdology","yourvue","attapoll"]],["Crowdology",["savanta"]],["Clariti",["clarity"]],["Y-Live",["ylive","y live"]],["Toluna",["toluna influencers"]],["Swagbucks",[]],["Ipsos iSay",["i-say","isay"]],["Qmee",[]],["OnePoll",["one poll"]],["Valued Opinions",[]],["Branded Surveys",[]],["Opinion Outpost",[]],["Paid Viewpoint",[]],["SurveyMonkey",["survey monkey"]]];
 var data=[],cur=[],gi=0;
@@ -110,6 +113,8 @@ function opts(a,first){return(first?'<option value="">'+first+"</option>":"")+a.
 $("fcat").innerHTML=opts(CATS,"All categories");
 $("frng").innerHTML=opts(RANGES.map(function(r){return r[0]}),"All age ranges");
 $("cat").innerHTML=opts(CATS,"Choose a category");
+$("fstatus").innerHTML=opts(STATUSES,"All statuses");
+$("status").innerHTML=opts(STATUSES,"Choose a status");
 
 function siteLists(){
   var known={};KNOWN.forEach(function(k){known[key(k[0])]=1});
@@ -128,10 +133,10 @@ function load(){
 }
 function imgs(e){return e.images&&e.images.length?e.images:[e.id]}
 function render(){
-  var raw=$("q").value.trim(),kq=key(raw),fc=$("fcat").value,fr=$("frng").value,so=$("sort").value;
+  var raw=$("q").value.trim(),kq=key(raw),fc=$("fcat").value,fr=$("frng").value,fs=$("fstatus").value,so=$("sort").value;
   var list=data.filter(function(e){
     var m=!kq||key(e.website).indexOf(kq)>-1||aliases(e.website).some(function(a){return a.indexOf(kq)>-1});
-    return m&&(!fc||e.category===fc)&&(!fr||range(e.age)===fr);
+    return m&&(!fc||e.category===fc)&&(!fs||e.status===fs)&&(!fr||range(e.age)===fr);
   });
   list.sort(function(a,b){
     if(so==="old")return a.added-b.added;
@@ -143,7 +148,7 @@ function render(){
   $("count").textContent=raw?list.length+" of "+data.length+" entries match \u201C"+raw+"\u201D":"Showing "+list.length+" of "+data.length+" entries";
   if(!list.length){$("list").innerHTML='<div class="empty">'+(data.length?"No entries match those filters. Try a shorter part of the website name, or clear a filter.":"No entries yet. Add the first one below.")+"</div>";return}
   $("list").innerHTML=list.map(function(e,n){
-    return'<article class="card"><div class="top"><span class="site">'+hl(e.website,raw)+'</span><span class="tag">'+esc(e.category||"Uncategorised")+'</span><span class="meta">Age '+e.age+" ("+range(e.age)+") · "+new Date(e.added).toLocaleDateString()+'</span><button class="del" data-del="'+e.id+'">Delete</button></div>'+
+    return'<article class="card"><div class="top"><span class="site">'+hl(e.website,raw)+'</span><span class="tag">'+esc(e.category||"Uncategorised")+'</span>'+(e.status?'<span class="st '+(e.status==="Successful"?"st-ok":e.status==="Screened out"?"st-no":"st-other")+'">'+esc(e.status)+'</span>':"")+'<span class="meta">Age '+e.age+" ("+range(e.age)+") · "+new Date(e.added).toLocaleDateString()+'</span><button class="del" data-del="'+e.id+'">Delete</button></div>'+
     (e.note?'<p class="note">'+esc(e.note)+"</p>":"")+
     '<div class="thumbs">'+imgs(e).map(function(k,i){return'<img src="/api/image?id='+k+'" alt="Answer image '+(i+1)+" from "+esc(e.website)+'" loading="lazy" data-e="'+n+'" data-i="'+i+'">'}).join("")+"</div></article>";
   }).join("");
@@ -163,7 +168,7 @@ function show(){$("big").src="/api/image?id="+gal[gi];$("pos").textContent=(gi+1
 $("prev").onclick=function(){if(gi>0){gi--;show()}};
 $("next").onclick=function(){if(gi<gal.length-1){gi++;show()}};
 $("close").onclick=function(){$("dlg").close()};
-["q","fcat","frng","sort"].forEach(function(i){$(i).oninput=render;$(i).onchange=render});
+["q","fcat","fstatus","frng","sort"].forEach(function(i){$(i).oninput=render;$(i).onchange=render});
 
 function shrink(file){
   return new Promise(function(res,rej){
@@ -191,7 +196,7 @@ $("form").onsubmit=function(ev){
   data.forEach(function(e){if(key(e.website)===k)name=e.website});
   b.disabled=true;say("Uploading…");
   Promise.all(Array.prototype.map.call($("image").files,shrink)).then(function(images){
-    var body=JSON.stringify({website:name,category:$("cat").value,age:$("age").value,note:$("note").value,images:images});
+    var body=JSON.stringify({website:name,category:$("cat").value,status:$("status").value,age:$("age").value,note:$("note").value,images:images});
     if(body.length>5000000)throw new Error("Images are too large. Remove one or use smaller pictures.");
     return fetch("/api/entries",{method:"POST",headers:{"content-type":"application/json"},body:body});
   }).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"Upload failed.");return j})})
